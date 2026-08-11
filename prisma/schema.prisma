@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String
+  password    String
+  createdAt   DateTime     @default(now())
+  pantryItems PantryItem[]
+}
+
+model PantryItem {
+  id         String   @id @default(cuid())
+  name       String
+  quantity   Float    @default(1)
+  unit       String   @default("pcs")
+  category   String   @default("other")
+  expiryDate DateTime
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiryDate])
+}
+
+/// Pantrix-owned Indian recipe catalog (our own API — not a third-party service)
+model Recipe {
+  id           String   @id @default(cuid())
+  title        String
+  description  String
+  mealType     String
+  cuisine      String   @default("indian")
+  prepTime     Int
+  cookTime     Int
+  servings     Int
+  ingredients  String
+  instructions String
+  tags         String
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([mealType])
+  @@index([cuisine])
+}
