@@ -8,12 +8,14 @@ datasource db {
 }
 
 model User {
-  id          String       @id @default(cuid())
-  email       String       @unique
-  name        String
-  password    String
-  createdAt   DateTime     @default(now())
-  pantryItems PantryItem[]
+  id             String         @id @default(cuid())
+  email          String         @unique
+  name           String
+  password       String
+  createdAt      DateTime       @default(now())
+  pantryItems    PantryItem[]
+  shoppingItems  ShoppingItem[]
+  cookLogs       CookLog[]
 }
 
 model PantryItem {
@@ -51,4 +53,34 @@ model Recipe {
 
   @@index([mealType])
   @@index([cuisine])
+}
+
+model ShoppingItem {
+  id        String   @id @default(cuid())
+  name      String
+  quantity  String?
+  checked   Boolean  @default(false)
+  source    String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model CookLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeId    String
+  recipeTitle String
+  calories    Int      @default(0)
+  protein     Int      @default(0)
+  cookTimeMin Int      @default(0)
+  cookedAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([cookedAt])
 }

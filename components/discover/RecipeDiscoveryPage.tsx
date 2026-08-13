@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { PrimaryButton } from "@/components/setup/PrimaryButton";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/Button";
 import { useKitchenPantry } from "@/context/KitchenPantryContext";
 import { useKitchenPreferences } from "@/context/KitchenPreferencesContext";
 import {
   matchRecipesToPantry,
-  pickAiSuggestion,
+  maxCookMinutes,
+  pickBestMatch,
+  recipeFitsDiet,
   type MatchedRecipe,
 } from "@/lib/matchDiscoverRecipes";
 import { AIRecipePrompt } from "./AIRecipePrompt";
@@ -17,7 +18,13 @@ import { EmptyRecipeState } from "./EmptyRecipeState";
 import { RecipeFilters } from "./RecipeFilters";
 import { RecipeGrid } from "./RecipeGrid";
 import { RecipeSection } from "./RecipeSection";
-import { mockRecipes, type MealFilter } from "./discover-data";
+import {
+  defaultExtraFilters,
+  mockRecipes,
+  type MealFilter,
+  type RecipeExtraFilters,
+} from "./discover-data";
+import type { CookingTimeId } from "@/components/setup/setup-data";
 
 function takeExclusive(
   source: MatchedRecipe[],
@@ -33,36 +40,85 @@ function takeExclusive(
   return picked;
 }
 
+function calorieLimit(filter: RecipeExtraFilters["calories"]): number | null {
+  if (filter === "under-200") return 200;
+  if (filter === "under-300") return 300;
+  if (filter === "under-400") return 400;
+  return null;
+}
+
 export function RecipeDiscoveryPage() {
   const { items: pantryItems, hydrated: pantryReady } = useKitchenPantry();
   const { preferences, hydrated: prefsReady } = useKitchenPreferences();
 
   const [meal, setMeal] = useState<MealFilter>("all");
+  const [extra, setExtra] = useState<RecipeExtraFilters>(defaultExtraFilters);
   const [craving, setCraving] = useState("");
   const [favourites, setFavourites] = useState<Record<string, boolean>>({});
   const [asked, setAsked] = useState(false);
 
-  const pantryNames = useMemo(
-    () => pantryItems.map((item) => item.name),
+  const prefsSeeded = useRef(false);
+
+  useEffect(() => {
+    if (!prefsReady || prefsSeeded.current) return;
+    prefsSeeded.current = true;
+    setExtra((current) => ({
+      ...current,
+      cookingTime:
+        preferences.cookingTime && preferences.cookingTime !== "enjoy"
+          ? preferences.cookingTime
+          : current.cookingTime,
+      diet:
+        preferences.diets.length === 1 ? preferences.diets[0] : current.diet,
+    }));
+  }, [prefsReady, preferences.cookingTime, preferences.diets]);
+
+  const pantryForMatch = useMemo(
+    () =>
+      pantryItems.map((item) => ({
+        name: item.name,
+        expiryDate: item.expiryDate,
+      })),
     [pantryItems]
   );
 
   const matched = useMemo(() => {
     if (!pantryReady || !prefsReady) return [];
-    return matchRecipesToPantry(mockRecipes, pantryNames, preferences, {
-      minMatchPercent: 50,
-      maxMissing: 2,
-    }).map((recipe) => ({
-      ...recipe,
-      favourite: favourites[recipe.id] ?? recipe.favourite,
-    }));
-  }, [pantryReady, prefsReady, pantryNames, preferences, favourites]);
+    return matchRecipesToPantry(mockRecipes, pantryForMatch, preferences).map(
+      (recipe) => ({
+        ...recipe,
+        favourite: favourites[recipe.id] ?? recipe.favourite,
+      })
+    );
+  }, [pantryReady, prefsReady, pantryForMatch, preferences, favourites]);
 
   const filtered = useMemo(() => {
-    return matched.filter((recipe) =>
-      meal === "all" ? true : recipe.mealType === meal
+    const cookLimit = maxCookMinutes(
+      extra.cookingTime === "any"
+        ? null
+        : (extra.cookingTime as CookingTimeId)
     );
-  }, [matched, meal]);
+    const maxCalories = calorieLimit(extra.calories);
+    const minMatch =
+      extra.matchPercent === "any" ? 0 : Number(extra.matchPercent);
+
+    return matched.filter((recipe) => {
+      if (meal !== "all" && recipe.mealType !== meal) return false;
+      if (cookLimit !== null && recipe.cookTimeMin > cookLimit) return false;
+      if (extra.cuisine !== "any") {
+        if (recipe.cuisine.toLowerCase() !== extra.cuisine) return false;
+      }
+      if (extra.diet !== "any" && !recipeFitsDiet(recipe, [extra.diet])) {
+        return false;
+      }
+      if (maxCalories !== null && recipe.calories > maxCalories) return false;
+      if (extra.difficulty !== "any" && recipe.difficulty !== extra.difficulty) {
+        return false;
+      }
+      if (recipe.matchPercent < minMatch) return false;
+      return true;
+    });
+  }, [matched, meal, extra]);
 
   const sections = useMemo(() => {
     const used = new Set<string>();
@@ -79,11 +135,7 @@ export function RecipeDiscoveryPage() {
       used,
       (r) => r.missing.length >= 1 && r.missing.length <= 2
     );
-    const quickEasy = takeExclusive(
-      filtered,
-      used,
-      (r) => r.cookTimeMin <= 30
-    );
+    const quickEasy = takeExclusive(filtered, used, (r) => r.cookTimeMin <= 30);
     const healthy = takeExclusive(filtered, used, (r) => Boolean(r.healthy));
     const moreMatches = takeExclusive(filtered, used, () => true);
 
@@ -97,10 +149,20 @@ export function RecipeDiscoveryPage() {
     };
   }, [filtered]);
 
-  const aiPick = useMemo(() => pickAiSuggestion(filtered), [filtered]);
+  const bestMatch = useMemo(() => pickBestMatch(filtered), [filtered]);
 
   function toggleFavourite(id: string) {
     setFavourites((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  async function addMissing(id: string) {
+    const recipe = matched.find((item) => item.id === id);
+    if (!recipe || recipe.missing.length === 0) return;
+    await fetch("/api/shopping", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names: recipe.missing, source: id }),
+    });
   }
 
   const loading = !pantryReady || !prefsReady;
@@ -128,11 +190,11 @@ export function RecipeDiscoveryPage() {
               What can you cook today?
             </h1>
             <p className="mt-3 text-[var(--muted)] sm:text-lg">
-              Recipes matched to your pantry
-              {pantryNames.length > 0
-                ? ` (${pantryNames.length} items)`
-                : ""}{" "}
-              and kitchen preferences.
+              Ranked by pantry match, expiry priority, and your preferences
+              {pantryItems.length > 0
+                ? ` · ${pantryItems.length} pantry items`
+                : ""}
+              .
             </p>
           </section>
 
@@ -149,13 +211,18 @@ export function RecipeDiscoveryPage() {
             </p>
           )}
 
-          <RecipeFilters activeMeal={meal} onMealChange={setMeal} />
+          <RecipeFilters
+            activeMeal={meal}
+            onMealChange={setMeal}
+            extra={extra}
+            onExtraChange={setExtra}
+          />
 
           {loading ? (
             <p className="text-sm text-[var(--muted)]">
               Matching recipes to your pantry…
             </p>
-          ) : pantryNames.length === 0 ? (
+          ) : pantryItems.length === 0 ? (
             <div className="rounded-[1.75rem] border border-dashed border-[var(--line)] bg-white p-10 text-center">
               <h2 className="font-display text-2xl font-semibold text-[var(--brand)]">
                 Add kitchen items first
@@ -177,41 +244,47 @@ export function RecipeDiscoveryPage() {
             <div className="space-y-6">
               <EmptyRecipeState onAsk={() => setAsked(true)} />
               <p className="text-center text-sm text-[var(--muted)]">
-                No recipes match your current pantry and preferences. Try adding
-                more ingredients or relaxing cooking-time / diet filters.
+                No recipes match these filters. Try a lower Match % or set
+                Cooking time / Diet back to Any.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setMeal("all");
+                    setExtra(defaultExtraFilters);
+                  }}
+                >
+                  Clear filters
+                </Button>
                 <Link href="/setup/groceries">
-                  <Button variant="secondary">Update pantry</Button>
-                </Link>
-                <Link href="/setup">
-                  <Button variant="ghost">Edit preferences</Button>
+                  <Button variant="ghost">Update pantry</Button>
                 </Link>
               </div>
             </div>
           ) : (
             <>
-              {aiPick && (
+              {bestMatch && (
                 <section className="overflow-hidden rounded-[1.75rem] bg-[var(--brand)] px-6 py-8 text-white sm:px-8">
                   <p className="text-sm font-semibold tracking-wide text-emerald-100/85">
-                    Pantrix AI Pick ✦
+                    Best match
                   </p>
                   <h2 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">
-                    {aiPick.reasonTitle}
+                    {bestMatch.reasonTitle}
                   </h2>
                   <p className="mt-4 font-display text-xl text-emerald-50">
-                    {aiPick.recipeTitle}
+                    {bestMatch.recipe.title}
                   </p>
                   <p className="mt-2 max-w-xl text-sm text-emerald-50/85">
-                    {aiPick.reason}
+                    {bestMatch.reason}
                   </p>
                   <div className="mt-6">
-                    <PrimaryButton
-                      type="button"
-                      className="bg-white text-[var(--brand)] hover:bg-emerald-50"
+                    <Link
+                      href={`/recipes/${bestMatch.recipe.id}`}
+                      className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-semibold text-[var(--brand)] hover:bg-emerald-50"
                     >
                       Cook This
-                    </PrimaryButton>
+                    </Link>
                   </div>
                 </section>
               )}
@@ -248,7 +321,7 @@ export function RecipeDiscoveryPage() {
                   <RecipeGrid
                     recipes={sections.almostThere}
                     onToggleFavourite={toggleFavourite}
-                    onAddMissing={() => undefined}
+                    onAddMissing={addMissing}
                   />
                 </RecipeSection>
               )}
@@ -285,7 +358,7 @@ export function RecipeDiscoveryPage() {
                   <RecipeGrid
                     recipes={sections.moreMatches}
                     onToggleFavourite={toggleFavourite}
-                    onAddMissing={() => undefined}
+                    onAddMissing={addMissing}
                   />
                 </RecipeSection>
               )}

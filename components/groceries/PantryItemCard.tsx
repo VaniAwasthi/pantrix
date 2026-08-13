@@ -1,17 +1,31 @@
 import { QuantitySelector } from "./QuantitySelector";
 import type { PantryGroceryItem } from "./groceries-data";
+import {
+  formatExpiryLabel,
+  getExpiryStatus,
+} from "@/utils/helpers";
 
 interface PantryItemCardProps {
   item: PantryGroceryItem;
   onQuantityChange: (id: string, quantity: number) => void;
+  onExpiryChange: (id: string, expiryDate: string) => void;
   onRemove: (id: string) => void;
 }
 
 export function PantryItemCard({
   item,
   onQuantityChange,
+  onExpiryChange,
   onRemove,
 }: PantryItemCardProps) {
+  const status = getExpiryStatus(item.expiryDate);
+  const statusClass =
+    status === "expired"
+      ? "text-red-600"
+      : status === "expiring-soon"
+        ? "text-amber-700"
+        : "text-[var(--muted)]";
+
   return (
     <article className="flex items-start gap-3 rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm">
       <span
@@ -47,6 +61,19 @@ export function PantryItemCard({
             min={item.unit === "g" || item.unit === "ml" ? 50 : 1}
           />
         </div>
+
+        <label className="mt-3 flex flex-col gap-1.5 text-xs font-semibold text-[var(--brand)]">
+          Expiry date
+          <input
+            type="date"
+            value={item.expiryDate}
+            onChange={(e) => onExpiryChange(item.id, e.target.value)}
+            className="h-10 w-full rounded-xl border border-[var(--line)] bg-[#fcfdfb] px-3 text-sm font-normal text-[var(--foreground)] focus:border-[var(--brand-soft)] focus:outline-none focus:ring-4 focus:ring-[var(--brand-soft)]/15"
+          />
+          <span className={`font-medium ${statusClass}`}>
+            {formatExpiryLabel(item.expiryDate)}
+          </span>
+        </label>
       </div>
     </article>
   );

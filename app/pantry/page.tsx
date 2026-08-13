@@ -10,6 +10,10 @@ import {
   useKitchenPantry,
 } from "@/context/KitchenPantryContext";
 import { groceryCategoryFilters } from "@/components/groceries/groceries-data";
+import {
+  formatExpiryLabel,
+  getExpiryStatus,
+} from "@/utils/helpers";
 
 type PantryUiState = {
   userName: string;
@@ -48,8 +52,15 @@ function categoryLabel(category: string) {
 }
 
 export default function PantryPage() {
-  const { items, hydrated, updateQuantity, removeItem, mergeItems } =
-    useKitchenPantry();
+  const {
+    items,
+    hydrated,
+    updateQuantity,
+    updateExpiry,
+    removeItem,
+    mergeItems,
+    syncItemToApi,
+  } = useKitchenPantry();
 
   const [ui, dispatchUi] = useReducer(pantryUiReducer, {
     userName: "",
@@ -127,8 +138,8 @@ export default function PantryPage() {
             My Pantry
           </h1>
           <p className="mt-2 max-w-xl text-[var(--muted)]">
-            Items you selected in &ldquo;What&apos;s in your kitchen&rdquo;
-            show here.
+            Ingredients, quantities, and expiry dates drive recipe matching —
+            items nearing expiry get priority.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -173,52 +184,85 @@ export default function PantryPage() {
                   {categoryLabel(category)}
                 </h3>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {categoryItems.map((item) => (
-                    <article
-                      key={item.id}
-                      className="flex items-start gap-3 rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm"
-                    >
-                      <span
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-glow)] text-2xl"
-                        aria-hidden
+                  {categoryItems.map((item) => {
+                    const status = getExpiryStatus(item.expiryDate);
+                    const statusClass =
+                      status === "expired"
+                        ? "text-red-600"
+                        : status === "expiring-soon"
+                          ? "text-amber-700"
+                          : "text-[var(--muted)]";
+
+                    return (
+                      <article
+                        key={item.id}
+                        className="flex items-start gap-3 rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm"
                       >
-                        {item.emoji}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="font-semibold text-[var(--brand)]">
-                              {item.name}
-                            </h4>
-                            <p className="mt-0.5 text-sm text-[var(--muted)]">
-                              {item.quantity} {item.unit}
-                            </p>
+                        <span
+                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-glow)] text-2xl"
+                          aria-hidden
+                        >
+                          {item.emoji}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="font-semibold text-[var(--brand)]">
+                                {item.name}
+                              </h4>
+                              <p className="mt-0.5 text-sm text-[var(--muted)]">
+                                {item.quantity} {item.unit}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50"
+                              loading={removingId === item.id}
+                              onClick={() => handleRemove(item.id)}
+                            >
+                              Remove
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:bg-red-50"
-                            loading={removingId === item.id}
-                            onClick={() => handleRemove(item.id)}
-                          >
-                            Remove
-                          </Button>
+                          <div className="mt-3">
+                            <QuantitySelector
+                              value={item.quantity}
+                              onChange={(qty) => {
+                                updateQuantity(item.id, qty);
+                                void syncItemToApi(item.id, { quantity: qty });
+                              }}
+                              step={
+                                item.unit === "g" || item.unit === "ml"
+                                  ? 50
+                                  : 1
+                              }
+                              min={
+                                item.unit === "g" || item.unit === "ml"
+                                  ? 50
+                                  : 1
+                              }
+                            />
+                          </div>
+                          <label className="mt-3 flex flex-col gap-1.5 text-xs font-semibold text-[var(--brand)]">
+                            Expiry date
+                            <input
+                              type="date"
+                              value={item.expiryDate}
+                              onChange={(e) => {
+                                const expiryDate = e.target.value;
+                                updateExpiry(item.id, expiryDate);
+                                void syncItemToApi(item.id, { expiryDate });
+                              }}
+                              className="h-10 w-full rounded-xl border border-[var(--line)] bg-[#fcfdfb] px-3 text-sm font-normal text-[var(--foreground)] focus:border-[var(--brand-soft)] focus:outline-none focus:ring-4 focus:ring-[var(--brand-soft)]/15"
+                            />
+                            <span className={`font-medium ${statusClass}`}>
+                              {formatExpiryLabel(item.expiryDate)}
+                            </span>
+                          </label>
                         </div>
-                        <div className="mt-3">
-                          <QuantitySelector
-                            value={item.quantity}
-                            onChange={(qty) => updateQuantity(item.id, qty)}
-                            step={
-                              item.unit === "g" || item.unit === "ml" ? 50 : 1
-                            }
-                            min={
-                              item.unit === "g" || item.unit === "ml" ? 50 : 1
-                            }
-                          />
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
             ))}

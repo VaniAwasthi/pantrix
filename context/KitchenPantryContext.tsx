@@ -16,7 +16,10 @@ import type {
   GroceryUnit,
   PantryGroceryItem,
 } from "@/components/groceries/groceries-data";
-import { groceryCatalog } from "@/components/groceries/groceries-data";
+import {
+  groceryCatalog,
+  suggestedExpiryDate,
+} from "@/components/groceries/groceries-data";
 import type { PantryItem } from "@/types/pantry";
 
 export const KITCHEN_PANTRY_STORAGE_KEY = "pantrix-kitchen-pantry";
@@ -36,6 +39,7 @@ type KitchenPantryAction =
   | { type: "ADD_FROM_CATALOG"; item: CatalogIngredient }
   | { type: "TOGGLE_CATALOG"; item: CatalogIngredient }
   | { type: "UPDATE_QUANTITY"; id: string; quantity: number }
+  | { type: "UPDATE_EXPIRY"; id: string; expiryDate: string }
   | { type: "REMOVE_ITEM"; id: string }
   | { type: "SET_ITEMS"; items: KitchenPantryItem[] }
   | { type: "MERGE_ITEMS"; items: KitchenPantryItem[] }
@@ -54,6 +58,7 @@ const VALID_CATEGORIES = new Set([
   "grains",
   "pulses",
   "spices",
+  "nuts",
   "protein",
   "other",
 ]);
@@ -84,17 +89,38 @@ function normalizeUnit(unit: string): GroceryUnit {
   return "pieces";
 }
 
+function ensureExpiry(item: KitchenPantryItem): KitchenPantryItem {
+  if (item.expiryDate) return item;
+  return {
+    ...item,
+    expiryDate: suggestedExpiryDate(item.category),
+  };
+}
+
 function mergeById(
   base: KitchenPantryItem[],
   incoming: KitchenPantryItem[]
 ): KitchenPantryItem[] {
   const map = new Map<string, KitchenPantryItem>();
-  for (const item of base) map.set(item.id, item);
+  for (const item of base) map.set(item.id, ensureExpiry(item));
   for (const item of incoming) {
     const existing = map.get(item.id);
-    map.set(item.id, existing ? { ...existing, ...item } : item);
+    const next = ensureExpiry(item);
+    map.set(item.id, existing ? { ...existing, ...next } : next);
   }
   return [...map.values()];
+}
+
+function catalogToPantryItem(item: CatalogIngredient): KitchenPantryItem {
+  return {
+    id: item.id,
+    name: item.name,
+    emoji: item.emoji,
+    category: item.category,
+    quantity: item.defaultQuantity,
+    unit: item.defaultUnit,
+    expiryDate: suggestedExpiryDate(item.category),
+  };
 }
 
 function kitchenPantryReducer(
@@ -114,17 +140,7 @@ function kitchenPantryReducer(
       }
       return {
         ...state,
-        items: [
-          ...state.items,
-          {
-            id: action.item.id,
-            name: action.item.name,
-            emoji: action.item.emoji,
-            category: action.item.category,
-            quantity: action.item.defaultQuantity,
-            unit: action.item.defaultUnit,
-          },
-        ],
+        items: [...state.items, catalogToPantryItem(action.item)],
       };
     }
 
@@ -137,17 +153,7 @@ function kitchenPantryReducer(
       }
       return {
         ...state,
-        items: [
-          ...state.items,
-          {
-            id: action.item.id,
-            name: action.item.name,
-            emoji: action.item.emoji,
-            category: action.item.category,
-            quantity: action.item.defaultQuantity,
-            unit: action.item.defaultUnit,
-          },
-        ],
+        items: [...state.items, catalogToPantryItem(action.item)],
       };
     }
 
@@ -159,7 +165,10 @@ function kitchenPantryReducer(
         (item) => item.name.toLowerCase() === action.item.name.toLowerCase()
       );
       if (sameName) return state;
-      return { ...state, items: [...state.items, action.item] };
+      return {
+        ...state,
+        items: [...state.items, ensureExpiry(action.item)],
+      };
     }
 
     case "UPDATE_QUANTITY":
@@ -168,6 +177,16 @@ function kitchenPantryReducer(
         items: state.items.map((item) =>
           item.id === action.id
             ? { ...item, quantity: Math.max(1, action.quantity) }
+            : item
+        ),
+      };
+
+    case "UPDATE_EXPIRY":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === action.id
+            ? { ...item, expiryDate: action.expiryDate }
             : item
         ),
       };
@@ -206,15 +225,20 @@ export function pantryApiItemToKitchen(item: PantryItem): KitchenPantryItem {
   const catalog = groceryCatalog.find(
     (entry) => entry.name.toLowerCase() === item.name.toLowerCase()
   );
+  const category = catalog?.category ?? normalizeCategory(item.category);
+  const expiryDate = item.expiryDate
+    ? item.expiryDate.slice(0, 10)
+    : suggestedExpiryDate(category);
 
   return {
     id: catalog?.id ?? `server-${item.id}`,
     serverId: item.id,
     name: item.name,
     emoji: catalog?.emoji ?? "🧺",
-    category: catalog?.category ?? normalizeCategory(item.category),
+    category,
     quantity: item.quantity,
     unit: catalog?.defaultUnit ?? normalizeUnit(item.unit),
+    expiryDate,
   };
 }
 
@@ -224,7 +248,7 @@ function readStoredItems(): KitchenPantryItem[] {
     const raw = window.localStorage.getItem(KITCHEN_PANTRY_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as KitchenPantryItem[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map(ensureExpiry) : [];
   } catch {
     return [];
   }
@@ -238,10 +262,14 @@ export function persistKitchenPantry(items: KitchenPantryItem[]) {
   );
 }
 
-function defaultExpiryDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
-  return date.toISOString().slice(0, 10);
+function toApiPayload(item: KitchenPantryItem) {
+  return {
+    name: item.name,
+    quantity: item.quantity,
+    unit: item.unit === "pieces" ? "pcs" : item.unit,
+    category: item.category,
+    expiryDate: item.expiryDate || suggestedExpiryDate(item.category),
+  };
 }
 
 type KitchenPantryContextValue = {
@@ -252,12 +280,21 @@ type KitchenPantryContextValue = {
   toggleCatalog: (item: CatalogIngredient) => void;
   addItem: (item: KitchenPantryItem) => void;
   updateQuantity: (id: string, quantity: number) => void;
+  updateExpiry: (id: string, expiryDate: string) => void;
   removeItem: (id: string) => void;
   setItems: (items: KitchenPantryItem[]) => void;
   mergeItems: (items: KitchenPantryItem[]) => void;
   linkServerId: (id: string, serverId: string) => void;
   clear: () => void;
   syncToApi: () => Promise<void>;
+  syncItemToApi: (
+    id: string,
+    patch?: Partial<KitchenPantryItem>
+  ) => Promise<void>;
+  applyServerPantry: (
+    serverItems: PantryItem[],
+    deductedNames?: string[]
+  ) => void;
 };
 
 const KitchenPantryContext = createContext<KitchenPantryContextValue | null>(
@@ -294,6 +331,10 @@ export function KitchenPantryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "UPDATE_QUANTITY", id, quantity });
   }, []);
 
+  const updateExpiry = useCallback((id: string, expiryDate: string) => {
+    dispatch({ type: "UPDATE_EXPIRY", id, expiryDate });
+  }, []);
+
   const removeItem = useCallback((id: string) => {
     dispatch({ type: "REMOVE_ITEM", id });
   }, []);
@@ -314,40 +355,68 @@ export function KitchenPantryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "CLEAR" });
   }, []);
 
+  const syncItemToApi = useCallback(
+    async (id: string, patch?: Partial<KitchenPantryItem>) => {
+      const item = itemsRef.current.find((entry) => entry.id === id);
+      if (!item) return;
+
+      const merged = ensureExpiry({ ...item, ...patch });
+      const payload = toApiPayload(merged);
+
+      try {
+        if (merged.serverId) {
+          await fetch(`/api/pantry/${merged.serverId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          return;
+        }
+
+        const res = await fetch("/api/pantry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.item?.id) {
+          dispatch({
+            type: "LINK_SERVER_ID",
+            id: merged.id,
+            serverId: data.item.id,
+          });
+        }
+      } catch {
+        // Keep local pantry even if API fails
+      }
+    },
+    []
+  );
+
   const syncToApi = useCallback(async () => {
     const current = itemsRef.current;
     persistKitchenPantry(current);
 
     for (const item of current) {
-      if (item.serverId) continue;
-
-      try {
-        const res = await fetch("/api/pantry", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: item.name,
-            quantity: item.quantity,
-            unit: item.unit === "pieces" ? "pcs" : item.unit,
-            category: item.category,
-            expiryDate: defaultExpiryDate(),
-          }),
-        });
-
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (data.item?.id) {
-          dispatch({
-            type: "LINK_SERVER_ID",
-            id: item.id,
-            serverId: data.item.id,
-          });
-        }
-      } catch {
-        // Keep local selection even if API fails
-      }
+      await syncItemToApi(item.id);
     }
-  }, []);
+  }, [syncItemToApi]);
+
+  const applyServerPantry = useCallback(
+    (serverItems: PantryItem[], deductedNames?: string[]) => {
+      const fromApi = serverItems.map(pantryApiItemToKitchen);
+      const deducted = new Set(
+        (deductedNames ?? []).map((name) => name.toLowerCase())
+      );
+      const localOnly = itemsRef.current.filter((item) => {
+        if (item.serverId) return false;
+        return !deducted.has(item.name.toLowerCase());
+      });
+      dispatch({ type: "SET_ITEMS", items: [...fromApi, ...localOnly] });
+    },
+    []
+  );
 
   const itemIds = useMemo(
     () => new Set(state.items.map((item) => item.id)),
@@ -363,12 +432,15 @@ export function KitchenPantryProvider({ children }: { children: ReactNode }) {
       toggleCatalog,
       addItem,
       updateQuantity,
+      updateExpiry,
       removeItem,
       setItems,
       mergeItems,
       linkServerId,
       clear,
       syncToApi,
+      syncItemToApi,
+      applyServerPantry,
     }),
     [
       state.items,
@@ -378,12 +450,15 @@ export function KitchenPantryProvider({ children }: { children: ReactNode }) {
       toggleCatalog,
       addItem,
       updateQuantity,
+      updateExpiry,
       removeItem,
       setItems,
       mergeItems,
       linkServerId,
       clear,
       syncToApi,
+      syncItemToApi,
+      applyServerPantry,
     ]
   );
 

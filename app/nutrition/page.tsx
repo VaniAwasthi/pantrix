@@ -1,23 +1,11 @@
 import type { Metadata } from "next";
-import { AppShell } from "@/components/layout/AppShell";
+import { NutritionTrackerPage } from "@/components/nutrition/NutritionTrackerPage";
 
 export const metadata: Metadata = {
   title: "Nutrition — Pantrix",
-  description: "Track nutrition goals and meal insights.",
+  description: "Track calories and protein from meals you cook.",
 };
 
-export default function NutritionPage() {
-  return (
-    <AppShell>
-      <div className="mx-auto max-w-xl py-16 text-center">
-        <h1 className="font-display text-3xl font-semibold text-[var(--brand)]">
-          Nutrition
-        </h1>
-        <p className="mt-3 text-[var(--muted)]">
-          Coming soon — meal nutrition summaries and goal progress will live
-          here.
-        </p>
-      </div>
-    </AppShell>
-  );
+export default function NutritionRoute() {
+  return <NutritionTrackerPage />;
 }

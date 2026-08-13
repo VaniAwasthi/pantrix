@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/utils/helpers";
 
 const navLinks = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/pantry", label: "Pantry" },
   { href: "/recipes", label: "Recipes" },
   { href: "/shopping", label: "Shopping" },
@@ -34,7 +35,7 @@ export function Navbar({ userName }: NavbarProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--line)]/80 bg-[#f6f3ee]/95 backdrop-blur-xl">
       <div className="relative z-50 mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Logo href="/recipes" />
+        <Logo href="/dashboard" />
 
         <nav
           className="hidden items-center gap-1 rounded-2xl bg-white/80 p-1 lg:flex"

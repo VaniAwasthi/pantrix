@@ -31,6 +31,7 @@ export function AddGroceriesForm() {
     toggleCatalog,
     addItem,
     updateQuantity,
+    updateExpiry,
     removeItem,
     syncToApi,
   } = useKitchenPantry();
@@ -97,8 +98,8 @@ export function AddGroceriesForm() {
             What&apos;s in your kitchen?
           </h1>
           <p className="mt-3 text-[var(--muted)] sm:text-lg">
-            Tap ingredients you have. They&apos;ll appear in your pantry right
-            away.
+            Tap ingredients you have, then set quantities and expiry dates.
+            Recipes prioritize items that expire soon.
           </p>
         </div>
 
@@ -177,6 +178,7 @@ export function AddGroceriesForm() {
                     key={item.id}
                     item={item}
                     onQuantityChange={updateQuantity}
+                    onExpiryChange={updateExpiry}
                     onRemove={removeItem}
                   />
                 ))}
