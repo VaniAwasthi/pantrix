@@ -96,10 +96,10 @@ export function RecipeCard({
         )}
 
         <Link
-          href={`/recipes/${recipe.id}`}
+          href={`/recipes/${recipe.id}/cook`}
           className="mt-4 inline-flex h-10 items-center rounded-xl bg-[var(--brand)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-soft)]"
         >
-          Cook this
+          Cook This
         </Link>
       </div>
     </article>

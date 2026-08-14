@@ -11,6 +11,7 @@ import {
   maxCookMinutes,
   pickBestMatch,
   recipeFitsDiet,
+  recipeMatchesQuery,
   type MatchedRecipe,
 } from "@/lib/matchDiscoverRecipes";
 import { AIRecipePrompt } from "./AIRecipePrompt";
@@ -53,6 +54,7 @@ export function RecipeDiscoveryPage() {
 
   const [meal, setMeal] = useState<MealFilter>("all");
   const [extra, setExtra] = useState<RecipeExtraFilters>(defaultExtraFilters);
+  const [search, setSearch] = useState("");
   const [craving, setCraving] = useState("");
   const [favourites, setFavourites] = useState<Record<string, boolean>>({});
   const [asked, setAsked] = useState(false);
@@ -116,9 +118,11 @@ export function RecipeDiscoveryPage() {
         return false;
       }
       if (recipe.matchPercent < minMatch) return false;
+      if (search && !recipeMatchesQuery(recipe, search)) return false;
+      if (asked && craving && !recipeMatchesQuery(recipe, craving)) return false;
       return true;
     });
-  }, [matched, meal, extra]);
+  }, [matched, meal, extra, search, asked, craving]);
 
   const sections = useMemo(() => {
     const used = new Set<string>();
@@ -198,6 +202,16 @@ export function RecipeDiscoveryPage() {
             </p>
           </section>
 
+          <label className="block">
+            <span className="sr-only">Recipe search</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search recipes — dal, paneer, breakfast…"
+              className="h-12 w-full rounded-2xl border border-[var(--line)] bg-white px-4 text-[15px] focus:border-[var(--brand-soft)] focus:outline-none focus:ring-4 focus:ring-[var(--brand-soft)]/15"
+            />
+          </label>
+
           <AIRecipePrompt
             value={craving}
             onChange={setCraving}
@@ -206,8 +220,7 @@ export function RecipeDiscoveryPage() {
 
           {asked && craving && (
             <p className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--muted)]">
-              Showing ideas inspired by “{craving}” — AI matching will plug in
-              here later.
+              Showing recipes that match “{craving}”.
             </p>
           )}
 
@@ -278,12 +291,18 @@ export function RecipeDiscoveryPage() {
                   <p className="mt-2 max-w-xl text-sm text-emerald-50/85">
                     {bestMatch.reason}
                   </p>
-                  <div className="mt-6">
+                  <div className="mt-6 flex flex-wrap gap-3">
                     <Link
-                      href={`/recipes/${bestMatch.recipe.id}`}
+                      href={`/recipes/${bestMatch.recipe.id}/cook`}
                       className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-semibold text-[var(--brand)] hover:bg-emerald-50"
                     >
                       Cook This
+                    </Link>
+                    <Link
+                      href={`/recipes/${bestMatch.recipe.id}`}
+                      className="inline-flex h-12 items-center justify-center rounded-2xl px-4 text-sm font-semibold text-white/85 hover:text-white"
+                    >
+                      View recipe
                     </Link>
                   </div>
                 </section>

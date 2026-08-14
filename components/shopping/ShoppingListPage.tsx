@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
+import { useKitchenPantry } from "@/context/KitchenPantryContext";
+import { useKitchenPreferences } from "@/context/KitchenPreferencesContext";
+import { matchRecipesToPantry } from "@/lib/matchDiscoverRecipes";
+import { mockRecipes } from "@/components/discover/discover-data";
 
 type ShoppingItem = {
   id: string;
@@ -16,6 +20,9 @@ export function ShoppingListPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const { items: pantryItems, hydrated } = useKitchenPantry();
+  const { preferences } = useKitchenPreferences();
 
   async function load() {
     const res = await fetch("/api/shopping");
@@ -29,6 +36,35 @@ export function ShoppingListPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  async function autoGenerate() {
+    setGenerating(true);
+    try {
+      const matched = matchRecipesToPantry(
+        mockRecipes,
+        pantryItems.map((item) => ({
+          name: item.name,
+          expiryDate: item.expiryDate,
+        })),
+        preferences
+      );
+      const names = [
+        ...new Set(matched.flatMap((recipe) => recipe.missing)),
+      ];
+      if (names.length === 0) return;
+      const res = await fetch("/api/shopping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names, source: "auto" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data.items ?? []);
+      }
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
@@ -77,22 +113,33 @@ export function ShoppingListPage() {
           Shopping list
         </h1>
         <p className="mt-2 max-w-xl text-[var(--muted)]">
-          Missing ingredients from recipes you cook land here. Check them off
-          after you buy.
+          Add items yourself, auto-generate from recipe gaps, then mark them
+          purchased.
         </p>
       </div>
 
-      <form onSubmit={addItem} className="mb-6 flex gap-3">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Add an item"
-          className="h-12 flex-1 rounded-2xl border border-[var(--line)] bg-white px-4 text-sm focus:border-[var(--brand-soft)] focus:outline-none focus:ring-4 focus:ring-[var(--brand-soft)]/15"
-        />
-        <Button type="submit" loading={saving}>
-          Add
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
+        <form onSubmit={addItem} className="flex flex-1 gap-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Add an item"
+            className="h-12 flex-1 rounded-2xl border border-[var(--line)] bg-white px-4 text-sm focus:border-[var(--brand-soft)] focus:outline-none focus:ring-4 focus:ring-[var(--brand-soft)]/15"
+          />
+          <Button type="submit" loading={saving}>
+            Add
+          </Button>
+        </form>
+        <Button
+          type="button"
+          variant="secondary"
+          loading={generating}
+          disabled={!hydrated}
+          onClick={() => void autoGenerate()}
+        >
+          Auto-generate
         </Button>
-      </form>
+      </div>
 
       {loading ? (
         <p className="text-sm text-[var(--muted)]">Loading list…</p>
@@ -130,7 +177,7 @@ export function ShoppingListPage() {
           {done.length > 0 && (
             <section className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6">
               <h2 className="font-display text-xl font-semibold text-[var(--muted)]">
-                Bought ({done.length})
+                Purchased ({done.length})
               </h2>
               <ul className="mt-4 space-y-2">
                 {done.map((item) => (

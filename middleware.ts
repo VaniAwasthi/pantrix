@@ -54,6 +54,8 @@ export const config = {
     "/shopping/:path*",
     "/nutrition",
     "/nutrition/:path*",
+    "/profile",
+    "/profile/:path*",
     "/login",
     "/register",
   ],

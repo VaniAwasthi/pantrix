@@ -36,6 +36,7 @@ export const PROTECTED_ROUTES = [
   "/setup",
   "/shopping",
   "/nutrition",
+  "/profile",
 ];
 
 export const AUTH_ROUTES = ["/login", "/register"];

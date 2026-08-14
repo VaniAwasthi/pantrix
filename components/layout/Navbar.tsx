@@ -12,6 +12,7 @@ const navLinks = [
   { href: "/recipes", label: "Recipes" },
   { href: "/shopping", label: "Shopping" },
   { href: "/nutrition", label: "Nutrition" },
+  { href: "/profile", label: "Profile" },
 ] as const;
 
 interface NavbarProps {
@@ -58,10 +59,20 @@ export function Navbar({ userName }: NavbarProps) {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {userName && (
-            <span className="hidden max-w-[10rem] truncate rounded-full bg-[var(--brand-glow)] px-3 py-1 text-sm font-medium text-[var(--brand)] sm:inline">
+          {userName ? (
+            <Link
+              href="/profile"
+              className="hidden max-w-[10rem] truncate rounded-full bg-[var(--brand-glow)] px-3 py-1 text-sm font-medium text-[var(--brand)] hover:bg-[var(--brand-glow)] sm:inline"
+            >
               {userName}
-            </span>
+            </Link>
+          ) : (
+            <Link
+              href="/profile"
+              className="hidden text-sm font-semibold text-[var(--muted)] hover:text-[var(--brand)] sm:inline"
+            >
+              Profile
+            </Link>
           )}
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             Logout

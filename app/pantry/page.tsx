@@ -144,10 +144,10 @@ export default function PantryPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/setup/groceries">
-            <Button variant="secondary">Add more items</Button>
+            <Button variant="secondary">Add grocery</Button>
           </Link>
-          <Link href="/setup">
-            <Button variant="ghost">Edit preferences</Button>
+          <Link href="/profile">
+            <Button variant="ghost">Preferences</Button>
           </Link>
           {items.length > 0 && (
             <Link href="/recipes">

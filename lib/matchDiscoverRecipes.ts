@@ -238,3 +238,43 @@ export function pickBestMatch(recipes: MatchedRecipe[]) {
     reason: best.usesExpiring ? `${best.usesExpiring}. ${stats}` : stats,
   };
 }
+
+export function recipeMatchesQuery(recipe: MockRecipe, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const haystack = [
+    recipe.title,
+    recipe.cuisine,
+    recipe.mealType,
+    recipe.difficulty,
+    ...recipe.have,
+    ...recipe.missing,
+    recipe.healthy ? "healthy" : "",
+    recipe.cookTimeMin <= 15 ? "quick under 15" : "",
+    recipe.cookTimeMin <= 30 ? "under 30 minutes quick" : "",
+    recipe.calories <= 300 ? "low calorie light" : "",
+    containsAny([...recipe.have, ...recipe.missing], HIGH_PROTEIN_QUERY)
+      ? "high protein"
+      : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return q.split(/\s+/).every((word) => {
+    if (["something", "a", "an", "the", "my", "and", "with"].includes(word)) {
+      return true;
+    }
+    if (word === "potatoes") return haystack.includes("potato");
+    return haystack.includes(word);
+  });
+}
+
+const HIGH_PROTEIN_QUERY = [
+  "paneer",
+  "egg",
+  "eggs",
+  "dal",
+  "chicken",
+  "curd",
+];

@@ -1,80 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/Button";
-import { useKitchenPantry } from "@/context/KitchenPantryContext";
-import { useKitchenPreferences } from "@/context/KitchenPreferencesContext";
-import { matchRecipesToPantry } from "@/lib/matchDiscoverRecipes";
-import { mockRecipes } from "./discover-data";
-import { PantryMatchBadge } from "./PantryMatchBadge";
-import { ingredientsMatch } from "@/utils/ingredientAliases";
-import { normalizeIngredient } from "@/utils/helpers";
-import type { PantryItem } from "@/types/pantry";
+import { PantryMatchBadge } from "@/components/discover/PantryMatchBadge";
+import { useMatchedRecipe } from "@/hooks/useMatchedRecipe";
 
-type CookResult = {
-  deducted: { name: string; used: number; remaining: number; removed: boolean }[];
-  shoppingAdded: string[];
-  pantry: PantryItem[];
-  error?: string;
-};
-
-export function CookRecipePage() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
-  const router = useRouter();
-  const {
-    items: pantryItems,
-    hydrated: pantryReady,
-    applyServerPantry,
-  } = useKitchenPantry();
-  const { preferences, hydrated: prefsReady } = useKitchenPreferences();
-  const [cooking, setCooking] = useState(false);
+export function RecipeDetailsPage() {
+  const { recipe } = useMatchedRecipe();
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  const recipe = useMemo(() => {
-    const base = mockRecipes.find((item) => item.id === id);
-    if (!base) return null;
-    if (!pantryReady || !prefsReady) return { ...base, expiringCount: 0 };
-
-    const matched = matchRecipesToPantry(
-      [base],
-      pantryItems.map((item) => ({
-        name: item.name,
-        expiryDate: item.expiryDate,
-      })),
-      preferences
-    );
-    if (matched[0]) return matched[0];
-
-    const pantryNames = pantryItems.map((item) => item.name);
-    const ingredients = [...new Set([...base.have, ...base.missing])];
-    const have = ingredients.filter((ing) =>
-      pantryNames.some(
-        (name) =>
-          ingredientsMatch(name, ing) ||
-          normalizeIngredient(ing) === "water" ||
-          normalizeIngredient(ing) === "salt"
-      )
-    );
-    const missing = ingredients.filter((ing) => !have.includes(ing));
-    const matchPercent =
-      ingredients.length === 0
-        ? 0
-        : Math.round((have.length / ingredients.length) * 100);
-
-    return {
-      ...base,
-      have,
-      missing,
-      matchPercent,
-      expiringCount: 0,
-    };
-  }, [id, pantryItems, pantryReady, prefsReady, preferences]);
 
   async function addMissingToList() {
     if (!recipe || recipe.missing.length === 0) return;
@@ -95,36 +32,6 @@ export function CookRecipePage() {
       setError("Could not update the shopping list.");
     } finally {
       setAdding(false);
-    }
-  }
-
-  async function markCooked() {
-    if (!recipe) return;
-    setCooking(true);
-    setError("");
-    try {
-      const res = await fetch("/api/cook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeId: recipe.id }),
-      });
-      const data = (await res.json()) as CookResult;
-      if (!res.ok) {
-        setError(data.error ?? "Could not update pantry.");
-        return;
-      }
-
-      applyServerPantry(
-        data.pantry ?? [],
-        (data.deducted ?? []).map((item) => item.name)
-      );
-
-      router.push("/dashboard?cooked=1");
-      router.refresh();
-    } catch {
-      setError("Could not update pantry.");
-    } finally {
-      setCooking(false);
     }
   }
 
@@ -160,7 +67,12 @@ export function CookRecipePage() {
         <section
           className={`overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${recipe.imageGradient} p-6 text-white`}
         >
-          <PantryMatchBadge percent={recipe.matchPercent} />
+          <p className="text-xs font-bold tracking-[0.18em] text-white/80">
+            RECIPE DETAILS
+          </p>
+          <div className="mt-3">
+            <PantryMatchBadge percent={recipe.matchPercent} />
+          </div>
           <h1 className="mt-4 font-display text-3xl font-semibold sm:text-4xl">
             {recipe.title}
           </h1>
@@ -170,7 +82,7 @@ export function CookRecipePage() {
           </p>
         </section>
 
-        {"usesExpiring" in recipe && recipe.usesExpiring && (
+        {recipe.usesExpiring && (
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
             Use soon: {recipe.usesExpiring}
           </p>
@@ -188,7 +100,7 @@ export function CookRecipePage() {
                   key={item}
                   className="flex items-center justify-between text-sm"
                 >
-                  <span className="text-[var(--foreground)]">{item}</span>
+                  <span>{item}</span>
                   <span
                     className={
                       inPantry
@@ -207,7 +119,7 @@ export function CookRecipePage() {
               <Button
                 variant="secondary"
                 loading={adding}
-                onClick={addMissingToList}
+                onClick={() => void addMissingToList()}
               >
                 Add missing to shopping list
               </Button>
@@ -216,18 +128,24 @@ export function CookRecipePage() {
               </Link>
             </div>
           )}
+          {(message || error) && (
+            <p
+              className={`mt-4 text-sm font-medium ${
+                message ? "text-emerald-700" : "text-red-600"
+              }`}
+            >
+              {message || error}
+            </p>
+          )}
         </section>
 
         <section className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6">
           <h2 className="font-display text-xl font-semibold text-[var(--brand)]">
-            Cook
+            Steps overview
           </h2>
           <ol className="mt-4 space-y-3">
             {recipe.instructions.map((step, index) => (
-              <li
-                key={step}
-                className="flex gap-3 text-sm text-[var(--foreground)]"
-              >
+              <li key={step} className="flex gap-3 text-sm">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--brand-glow)] text-xs font-bold text-[var(--brand)]">
                   {index + 1}
                 </span>
@@ -235,28 +153,10 @@ export function CookRecipePage() {
               </li>
             ))}
           </ol>
-
-          {message && (
-            <p className="mt-4 text-sm font-medium text-emerald-700">
-              {message}
-            </p>
-          )}
-          {error && (
-            <p className="mt-4 text-sm font-medium text-red-600">{error}</p>
-          )}
-
           <div className="mt-6">
-            <Button
-              loading={cooking}
-              onClick={markCooked}
-              className="w-full sm:w-auto"
-            >
-              I cooked this
-            </Button>
-            <p className="mt-2 text-xs text-[var(--muted)]">
-              Updates pantry stock, logs nutrition, and adds missing items to
-              your shopping list.
-            </p>
+            <Link href={`/recipes/${recipe.id}/cook`}>
+              <Button className="w-full sm:w-auto">Start cooking</Button>
+            </Link>
           </div>
         </section>
       </main>
