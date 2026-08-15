@@ -26,6 +26,11 @@ export function AddIngredientModal({
   const [unit, setUnit] = useState<GroceryUnit>("pieces");
   const [category, setCategory] =
     useState<Exclude<GroceryCategory, "all">>("other");
+  const [expiryDate, setExpiryDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  });
   const [error, setError] = useState("");
 
   if (!open) return null;
@@ -42,6 +47,10 @@ export function AddIngredientModal({
       setError("Enter a valid quantity");
       return;
     }
+    if (!expiryDate) {
+      setError("Expiry date is required");
+      return;
+    }
 
     onAdd({
       name: trimmed,
@@ -49,12 +58,16 @@ export function AddIngredientModal({
       category,
       quantity: qty,
       unit,
+      expiryDate,
     });
 
     setName("");
     setQuantity("1");
     setUnit("pieces");
     setCategory("other");
+    const next = new Date();
+    next.setDate(next.getDate() + 7);
+    setExpiryDate(next.toISOString().slice(0, 10));
     setError("");
     onClose();
   }
@@ -136,6 +149,19 @@ export function AddIngredientModal({
                   </option>
                 ))}
             </select>
+          </Field>
+
+          <Field label="Expiry date">
+            <input
+              type="date"
+              value={expiryDate}
+              onChange={(e) => {
+                setExpiryDate(e.target.value);
+                setError("");
+              }}
+              className={inputClass}
+              required
+            />
           </Field>
 
           {error && (

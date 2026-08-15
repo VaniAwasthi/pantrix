@@ -24,6 +24,7 @@ export interface MockRecipe {
   favourite?: boolean;
   usesExpiring?: string;
   healthy?: boolean;
+  instructions: string[];
 }
 
 export const mealFilters: { id: MealFilter; label: string }[] = [
@@ -43,6 +44,36 @@ export const extraFilters = [
   "Difficulty",
   "Match %",
 ] as const;
+
+export type CookingTimeFilter = "any" | "under-15" | "15-30" | "30-60";
+export type DietFilter =
+  | "any"
+  | "vegetarian"
+  | "vegan"
+  | "eggetarian"
+  | "non-vegetarian";
+export type CalorieFilter = "any" | "under-200" | "under-300" | "under-400";
+export type MatchPercentFilter = "any" | "70" | "80" | "90" | "100";
+export type DifficultyFilter = "any" | RecipeDifficulty;
+export type CuisineFilter = "any" | "indian" | "asian";
+
+export type RecipeExtraFilters = {
+  cookingTime: CookingTimeFilter;
+  cuisine: CuisineFilter;
+  diet: DietFilter;
+  calories: CalorieFilter;
+  difficulty: DifficultyFilter;
+  matchPercent: MatchPercentFilter;
+};
+
+export const defaultExtraFilters: RecipeExtraFilters = {
+  cookingTime: "any",
+  cuisine: "any",
+  diet: "any",
+  calories: "any",
+  difficulty: "any",
+  matchPercent: "100",
+};
 
 export const cravingExamples = [
   "Something quick and spicy",
@@ -66,6 +97,12 @@ export const mockRecipes: MockRecipe[] = [
     have: ["Potato", "Cumin", "Onion"],
     missing: [],
     favourite: false,
+    instructions: [
+      "Peel and cube the potatoes. Slice the onion.",
+      "Heat oil, add cumin until it splutters, then fry onion until golden.",
+      "Add potatoes, salt, and a pinch of turmeric. Cover and cook until tender.",
+      "Finish with coriander if you have it, and serve hot.",
+    ],
   },
   {
     id: "palak-paneer",
@@ -82,6 +119,12 @@ export const mockRecipes: MockRecipe[] = [
     missing: ["Cream"],
     usesExpiring: "Spinach expires in 2 days",
     favourite: true,
+    instructions: [
+      "Blanch spinach, then blend into a smooth puree.",
+      "Sauté onion, garlic, and tomato in ghee with cumin.",
+      "Add the spinach puree and cubed paneer. Simmer 8–10 minutes.",
+      "Stir in cream if you have it, then serve with roti or rice.",
+    ],
   },
   {
     id: "dal-tadka",
@@ -96,6 +139,11 @@ export const mockRecipes: MockRecipe[] = [
     mealType: "lunch",
     have: ["Dal", "Onion", "Tomato", "Cumin", "Turmeric", "Ghee", "Rice"],
     missing: [],
+    instructions: [
+      "Rinse dal and boil with turmeric until soft.",
+      "In ghee, fry cumin, onion, and tomato for the tadka.",
+      "Pour the tadka over the dal, simmer 5 minutes, and serve with rice.",
+    ],
   },
   {
     id: "paneer-butter",
@@ -110,6 +158,11 @@ export const mockRecipes: MockRecipe[] = [
     mealType: "dinner",
     have: ["Paneer", "Tomato", "Onion", "Butter"],
     missing: ["Cream", "Cashews"],
+    instructions: [
+      "Blend tomato and onion into a gravy base.",
+      "Cook the gravy in butter until thick and rich.",
+      "Add paneer cubes. Finish with cream or cashews if you have them.",
+    ],
   },
   {
     id: "masala-omelette",
@@ -125,6 +178,11 @@ export const mockRecipes: MockRecipe[] = [
     have: ["Eggs", "Onion", "Tomato", "Green Chilli"],
     missing: [],
     healthy: true,
+    instructions: [
+      "Beat eggs with salt. Chop onion, tomato, and green chilli.",
+      "Pour into a hot pan and scatter the vegetables on top.",
+      "Fold and cook until just set. Serve immediately.",
+    ],
   },
   {
     id: "veg-fried-rice",
@@ -139,6 +197,11 @@ export const mockRecipes: MockRecipe[] = [
     mealType: "dinner",
     have: ["Rice", "Carrot", "Onion"],
     missing: ["Beans", "Soy Sauce"],
+    instructions: [
+      "Use leftover or cooled cooked rice.",
+      "Stir-fry onion and carrot (and beans if you have them) on high heat.",
+      "Add rice, soy sauce if available, and toss until hot.",
+    ],
   },
   {
     id: "poha",
@@ -154,6 +217,11 @@ export const mockRecipes: MockRecipe[] = [
     have: ["Poha", "Onion", "Potato", "Peanut"],
     missing: [],
     healthy: true,
+    instructions: [
+      "Rinse poha and drain. Cube and boil or pan-fry the potato.",
+      "Sauté onion and peanuts, then add poha and potato.",
+      "Season, toss gently, and serve with lemon.",
+    ],
   },
   {
     id: "fruit-chaat",
@@ -169,6 +237,11 @@ export const mockRecipes: MockRecipe[] = [
     have: ["Apple", "Banana", "Lemon"],
     missing: ["Chaat Masala"],
     healthy: true,
+    instructions: [
+      "Chop apple and banana into bite-size pieces.",
+      "Toss with lemon juice and chaat masala if you have it.",
+      "Serve immediately so the fruit stays fresh.",
+    ],
   },
 ];
 

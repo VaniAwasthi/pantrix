@@ -1,8 +1,14 @@
-import { normalizeIngredient } from "@/utils/helpers";
+import {
+  formatExpiryLabel,
+  getDaysUntilExpiry,
+  normalizeIngredient,
+} from "@/utils/helpers";
 import { ingredientsMatch } from "@/utils/ingredientAliases";
+import { EXPIRY_WARNING_DAYS } from "@/utils/constants";
 import type { KitchenPreferences } from "@/context/KitchenPreferencesContext";
 import type { MockRecipe } from "@/components/discover/discover-data";
 import type { CookingTimeId } from "@/components/setup/setup-data";
+import { nutritionGoals } from "@/components/setup/setup-data";
 
 const ALWAYS_AVAILABLE = new Set(["water", "salt", "paani"]);
 
@@ -28,6 +34,11 @@ const DAIRY_KEYWORDS = [
   "cream",
 ];
 
+export type PantryMatchItem = {
+  name: string;
+  expiryDate: string;
+};
+
 function pantryHas(pantryNames: string[], ingredient: string): boolean {
   const needed = normalizeIngredient(ingredient);
   if (ALWAYS_AVAILABLE.has(needed)) return true;
@@ -45,7 +56,10 @@ function containsAny(ingredients: string[], keywords: string[]): boolean {
   });
 }
 
-function fitsDiet(recipe: MockRecipe, diets: KitchenPreferences["diets"]) {
+export function recipeFitsDiet(
+  recipe: MockRecipe,
+  diets: KitchenPreferences["diets"]
+) {
   if (diets.length === 0) return true;
 
   const ingredients = ingredientList(recipe);
@@ -62,7 +76,7 @@ function fitsDiet(recipe: MockRecipe, diets: KitchenPreferences["diets"]) {
   });
 }
 
-function maxCookMinutes(cookingTime: CookingTimeId | null): number | null {
+export function maxCookMinutes(cookingTime: CookingTimeId | null): number | null {
   if (!cookingTime) return null;
   if (cookingTime === "under-15") return 15;
   if (cookingTime === "15-30") return 30;
@@ -70,7 +84,7 @@ function maxCookMinutes(cookingTime: CookingTimeId | null): number | null {
   return null; // "enjoy" = no limit
 }
 
-function fitsCuisine(
+export function recipeFitsCuisine(
   recipe: MockRecipe,
   cuisines: KitchenPreferences["cuisines"]
 ) {
@@ -92,7 +106,8 @@ function fitsNutrition(
 ) {
   if (!goal || goal === "no-goal" || goal === "balanced") return true;
   if (goal === "low-carb") return recipe.calories <= 300;
-  if (goal === "weight-loss") return recipe.calories <= 350 || Boolean(recipe.healthy);
+  if (goal === "weight-loss")
+    return recipe.calories <= 350 || Boolean(recipe.healthy);
   if (goal === "high-protein" || goal === "muscle-gain") {
     return (
       Boolean(recipe.healthy) ||
@@ -109,33 +124,64 @@ function fitsNutrition(
   return true;
 }
 
+function goalLabelFor(
+  recipe: MockRecipe,
+  goal: KitchenPreferences["nutritionGoal"]
+): string | undefined {
+  if (!goal || goal === "no-goal") return undefined;
+  if (!fitsNutrition(recipe, goal)) return undefined;
+  return nutritionGoals.find((g) => g.id === goal)?.label;
+}
+
+function buildUsesExpiring(
+  recipeIngredients: string[],
+  expiringItems: PantryMatchItem[]
+): string | undefined {
+  const used = expiringItems.filter((item) =>
+    recipeIngredients.some((ing) => ingredientsMatch(item.name, ing))
+  );
+  if (used.length === 0) return undefined;
+
+  const soonest = [...used].sort(
+    (a, b) =>
+      getDaysUntilExpiry(a.expiryDate) - getDaysUntilExpiry(b.expiryDate)
+  )[0];
+
+  return `${soonest.name} — ${formatExpiryLabel(soonest.expiryDate)}`;
+}
+
 export type MatchedRecipe = MockRecipe & {
   matchPercent: number;
   have: string[];
   missing: string[];
   usesExpiring?: string;
+  expiringCount: number;
+  goalLabel?: string;
 };
 
 export function matchRecipesToPantry(
   recipes: MockRecipe[],
-  pantryNames: string[],
-  preferences: KitchenPreferences,
-  options?: { minMatchPercent?: number; maxMissing?: number }
+  pantryItems: PantryMatchItem[],
+  preferences: KitchenPreferences
 ): MatchedRecipe[] {
-  const minMatch = options?.minMatchPercent ?? 50;
-  const maxMissing = options?.maxMissing ?? 2;
-  const cookLimit = maxCookMinutes(preferences.cookingTime);
+  const activeItems = pantryItems.filter((item) => {
+    if (!item.expiryDate) return true;
+    return getDaysUntilExpiry(item.expiryDate) >= 0;
+  });
+  if (activeItems.length === 0 && pantryItems.length === 0) return [];
 
-  if (pantryNames.length === 0) return [];
+  const pantryNames = (activeItems.length > 0 ? activeItems : pantryItems).map(
+    (item) => item.name
+  );
+  const expiringItems = activeItems.filter((item) => {
+    if (!item.expiryDate) return false;
+    const days = getDaysUntilExpiry(item.expiryDate);
+    return days >= 0 && days <= EXPIRY_WARNING_DAYS;
+  });
 
   const matched: MatchedRecipe[] = [];
 
   for (const recipe of recipes) {
-    if (!fitsDiet(recipe, preferences.diets)) continue;
-    if (!fitsCuisine(recipe, preferences.cuisines)) continue;
-    if (!fitsNutrition(recipe, preferences.nutritionGoal)) continue;
-    if (cookLimit !== null && recipe.cookTimeMin > cookLimit) continue;
-
     const ingredients = ingredientList(recipe);
     if (ingredients.length === 0) continue;
 
@@ -143,17 +189,12 @@ export function matchRecipesToPantry(
     const missing = ingredients.filter((ing) => !pantryHas(pantryNames, ing));
     const matchPercent = Math.round((have.length / ingredients.length) * 100);
 
-    // Hide dishes you clearly can't cook (e.g. omelette without eggs)
-    if (matchPercent < minMatch) continue;
-    if (missing.length > maxMissing) continue;
+    if (have.length === 0) continue;
 
-    const usesExpiring =
-      recipe.usesExpiring &&
-      pantryNames.some((name) =>
-        recipe.usesExpiring!.toLowerCase().includes(normalizeIngredient(name))
-      )
-        ? recipe.usesExpiring
-        : undefined;
+    const usesExpiring = buildUsesExpiring(ingredients, expiringItems);
+    const expiringCount = expiringItems.filter((item) =>
+      ingredients.some((ing) => ingredientsMatch(item.name, ing))
+    ).length;
 
     matched.push({
       ...recipe,
@@ -162,33 +203,78 @@ export function matchRecipesToPantry(
       missing,
       favourite: recipe.favourite,
       usesExpiring,
+      expiringCount,
       healthy: recipe.healthy,
+      goalLabel: goalLabelFor(recipe, preferences.nutritionGoal),
     });
   }
 
-  return matched.sort((a, b) => b.matchPercent - a.matchPercent);
+  return matched.sort((a, b) => {
+    if (b.matchPercent !== a.matchPercent) return b.matchPercent - a.matchPercent;
+    if (b.expiringCount !== a.expiringCount)
+      return b.expiringCount - a.expiringCount;
+    return a.cookTimeMin - b.cookTimeMin;
+  });
 }
 
-export function pickAiSuggestion(recipes: MatchedRecipe[]) {
+export function pickBestMatch(recipes: MatchedRecipe[]) {
   const expiring = recipes.find((r) => r.usesExpiring && r.matchPercent >= 70);
-  if (expiring) {
-    return {
-      reasonTitle: "Use an ingredient before it expires.",
-      recipeTitle: expiring.title,
-      reason:
-        expiring.usesExpiring ??
-        `You already have ${expiring.matchPercent}% of what you need.`,
-      recipeId: expiring.id,
-    };
-  }
-
-  const best = recipes[0];
+  const best = expiring ?? recipes[0];
   if (!best) return null;
 
+  const stats = [
+    `${best.matchPercent}% pantry match`,
+    `${best.cookTimeMin} min`,
+    best.goalLabel,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return {
-    reasonTitle: "Best match from your pantry.",
-    recipeTitle: best.title,
-    reason: `You have ${best.matchPercent}% of the ingredients for ${best.title}.`,
-    recipeId: best.id,
+    recipe: best,
+    reasonTitle: best.usesExpiring
+      ? "Cook this before it expires"
+      : "Best pantry match",
+    reason: best.usesExpiring ? `${best.usesExpiring}. ${stats}` : stats,
   };
 }
+
+export function recipeMatchesQuery(recipe: MockRecipe, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const haystack = [
+    recipe.title,
+    recipe.cuisine,
+    recipe.mealType,
+    recipe.difficulty,
+    ...recipe.have,
+    ...recipe.missing,
+    recipe.healthy ? "healthy" : "",
+    recipe.cookTimeMin <= 15 ? "quick under 15" : "",
+    recipe.cookTimeMin <= 30 ? "under 30 minutes quick" : "",
+    recipe.calories <= 300 ? "low calorie light" : "",
+    containsAny([...recipe.have, ...recipe.missing], HIGH_PROTEIN_QUERY)
+      ? "high protein"
+      : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return q.split(/\s+/).every((word) => {
+    if (["something", "a", "an", "the", "my", "and", "with"].includes(word)) {
+      return true;
+    }
+    if (word === "potatoes") return haystack.includes("potato");
+    return haystack.includes(word);
+  });
+}
+
+const HIGH_PROTEIN_QUERY = [
+  "paneer",
+  "egg",
+  "eggs",
+  "dal",
+  "chicken",
+  "curd",
+];

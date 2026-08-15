@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/utils/helpers";
 
 const navLinks = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/pantry", label: "Pantry" },
   { href: "/recipes", label: "Recipes" },
   { href: "/shopping", label: "Shopping" },
   { href: "/nutrition", label: "Nutrition" },
+  { href: "/profile", label: "Profile" },
 ] as const;
 
 interface NavbarProps {
@@ -34,7 +36,7 @@ export function Navbar({ userName }: NavbarProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--line)]/80 bg-[#f6f3ee]/95 backdrop-blur-xl">
       <div className="relative z-50 mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Logo href="/recipes" />
+        <Logo href="/dashboard" />
 
         <nav
           className="hidden items-center gap-1 rounded-2xl bg-white/80 p-1 lg:flex"
@@ -57,10 +59,20 @@ export function Navbar({ userName }: NavbarProps) {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {userName && (
-            <span className="hidden max-w-[10rem] truncate rounded-full bg-[var(--brand-glow)] px-3 py-1 text-sm font-medium text-[var(--brand)] sm:inline">
+          {userName ? (
+            <Link
+              href="/profile"
+              className="hidden max-w-[10rem] truncate rounded-full bg-[var(--brand-glow)] px-3 py-1 text-sm font-medium text-[var(--brand)] hover:bg-[var(--brand-glow)] sm:inline"
+            >
               {userName}
-            </span>
+            </Link>
+          ) : (
+            <Link
+              href="/profile"
+              className="hidden text-sm font-semibold text-[var(--muted)] hover:text-[var(--brand)] sm:inline"
+            >
+              Profile
+            </Link>
           )}
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             Logout

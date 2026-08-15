@@ -1,8 +1,8 @@
 import { RecipeCard } from "./RecipeCard";
-import type { MockRecipe } from "./discover-data";
+import type { MatchedRecipe } from "@/lib/matchDiscoverRecipes";
 
 interface RecipeGridProps {
-  recipes: MockRecipe[];
+  recipes: MatchedRecipe[];
   onToggleFavourite?: (id: string) => void;
   onAddMissing?: (id: string) => void;
 }

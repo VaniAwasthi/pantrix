@@ -30,11 +30,13 @@ export const EXPIRY_WARNING_DAYS = 3;
 export const AUTH_COOKIE_NAME = "pantrix-token";
 
 export const PROTECTED_ROUTES = [
+  "/dashboard",
   "/pantry",
   "/recipes",
   "/setup",
   "/shopping",
   "/nutrition",
+  "/profile",
 ];
 
 export const AUTH_ROUTES = ["/login", "/register"];

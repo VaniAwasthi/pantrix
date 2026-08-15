@@ -29,10 +29,10 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (isAuthRoute && token) {
+  if ((isAuthRoute || pathname === "/") && token) {
     const session = await verifyToken(token);
     if (session) {
-      return NextResponse.redirect(new URL("/recipes", request.url));
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 
@@ -41,6 +41,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
+    "/dashboard",
+    "/dashboard/:path*",
     "/pantry",
     "/pantry/:path*",
     "/recipes",
@@ -51,6 +54,8 @@ export const config = {
     "/shopping/:path*",
     "/nutrition",
     "/nutrition/:path*",
+    "/profile",
+    "/profile/:path*",
     "/login",
     "/register",
   ],
