@@ -72,7 +72,7 @@ export const defaultExtraFilters: RecipeExtraFilters = {
   diet: "any",
   calories: "any",
   difficulty: "any",
-  matchPercent: "any",
+  matchPercent: "100",
 };
 
 export const cravingExamples = [

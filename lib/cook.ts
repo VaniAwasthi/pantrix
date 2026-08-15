@@ -12,6 +12,7 @@ const HIGH_PROTEIN = [
   "egg",
   "eggs",
   "dal",
+  "chana",
   "chicken",
   "curd",
   "fish",

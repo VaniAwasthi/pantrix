@@ -101,8 +101,7 @@ export function RecipeDiscoveryPage() {
         : (extra.cookingTime as CookingTimeId)
     );
     const maxCalories = calorieLimit(extra.calories);
-    const minMatch =
-      extra.matchPercent === "any" ? 0 : Number(extra.matchPercent);
+    const minMatch = 100;
 
     return matched.filter((recipe) => {
       if (meal !== "all" && recipe.mealType !== meal) return false;
@@ -117,7 +116,9 @@ export function RecipeDiscoveryPage() {
       if (extra.difficulty !== "any" && recipe.difficulty !== extra.difficulty) {
         return false;
       }
-      if (recipe.matchPercent < minMatch) return false;
+      if (recipe.matchPercent < minMatch || recipe.missing.length > 0) {
+        return false;
+      }
       if (search && !recipeMatchesQuery(recipe, search)) return false;
       if (asked && craving && !recipeMatchesQuery(recipe, craving)) return false;
       return true;
@@ -194,7 +195,7 @@ export function RecipeDiscoveryPage() {
               What can you cook today?
             </h1>
             <p className="mt-3 text-[var(--muted)] sm:text-lg">
-              Ranked by pantry match, expiry priority, and your preferences
+              Only 100% pantry-match dishes — you already have every ingredient
               {pantryItems.length > 0
                 ? ` · ${pantryItems.length} pantry items`
                 : ""}
@@ -257,8 +258,8 @@ export function RecipeDiscoveryPage() {
             <div className="space-y-6">
               <EmptyRecipeState onAsk={() => setAsked(true)} />
               <p className="text-center text-sm text-[var(--muted)]">
-                No recipes match these filters. Try a lower Match % or set
-                Cooking time / Diet back to Any.
+                No 100% pantry-match dishes yet. Add more groceries so a recipe
+                uses only what you already have.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button
