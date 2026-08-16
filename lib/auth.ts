@@ -7,7 +7,7 @@ import type { User } from "@/types/user";
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "pantrix-dev-secret-change-in-production"
 );
-
+// hey
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export interface SessionPayload {
