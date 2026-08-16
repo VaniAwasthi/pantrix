@@ -62,14 +62,14 @@ Copy the environment file (already done if you followed setup):
 cp .env.example .env
 ```
 
-**Local (default):** uses SQLite — no cloud database needed.
+**Local dev:** SQLite is fine for quick local testing.
 
 ```env
 DATABASE_URL="file:./dev.db"
 JWT_SECRET="your-random-secret-key"
 ```
 
-**Vercel production:** create a free PostgreSQL DB on [Neon](https://neon.tech), [Supabase](https://supabase.com), or [Vercel Postgres](https://vercel.com/storage/postgres). Change `provider` in `prisma/schema.prisma` to `"postgresql"`, then set `DATABASE_URL` in Vercel env vars.
+**Vercel production:** use a real PostgreSQL database from [Neon](https://neon.tech), [Supabase](https://supabase.com), or [Vercel Postgres](https://vercel.com/storage/postgres). Set `DATABASE_URL` in Vercel env vars and change the Prisma datasource provider in `prisma/schema.prisma` to `"postgresql"` before deploying.
 
 ## Indian recipe catalog
 
